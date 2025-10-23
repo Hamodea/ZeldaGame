@@ -131,6 +131,10 @@ namespace Zelda_game
 
             prevKb = kb;
 
+            // decrement player hit timer (invulnerability window)
+            if (_playerHitTimer > 0.0)
+                _playerHitTimer -= gameTime.ElapsedGameTime.TotalSeconds;
+
             // update Enemy
             for (int e = 0; e < _enemies.Count; e++)
             {
@@ -151,6 +155,7 @@ namespace Zelda_game
                     if (proj.Bounds.Intersects(enemy.enemyBounds))
                     {
                         // markera enemy död och ta bort projektil
+                        // if enemy drops key, that logic should be handled here (kept as before)
                         enemy.Kill();
                         proj.Kill();
 
@@ -163,12 +168,12 @@ namespace Zelda_game
                         // ta bort enemy från listan så den försvinner helt
                         _enemies.RemoveAt(e);
 
-                        
+                        break;
                     }
                 }
             }
 
-            // Kollisionskontroll: enemy träffar player -> förlora 1 liv
+            // Kollisionskontroll: enemy träffar player -> förlora 1 liv (enemy kvar)
             for (int e = _enemies.Count - 1; e >= 0; e--)
             {
                 var enemy = _enemies[e];
@@ -181,56 +186,55 @@ namespace Zelda_game
                         _player.Hurt();
                         _playerHitTimer = PlayerHitCooldown;
 
-                        // remove enemy so it doesn't hit repeatedly (adjust behavior as you want)
-                        
-
-
                         // check gameover
                         if (_player.Lives <= 0)
                         {
                             _gameState.ChangeState(GameState.State.GameOver);
                         }
                     }
+
+                    // do not remove/killing the enemy here
                 }
-
-                _player.Update(gameTime);
-
-                // --- Key pickup and door opening logic ---
-                int px = _player.TileX;
-                int py = _player.TileY;
-                if (_map.IsInside(px, py))
-                {
-                    var tileTex = _map.GetTileTexture(px, py);
-
-                    // pickup key
-                    if (tileTex == TextureManager.zeldaKey && !_player.HasKey)
-                    {
-                        _player.PickupKey();
-                        _map.SetTileTexture(px, py, TextureManager.grassTex, true);
-                        System.Diagnostics.Debug.WriteLine("Key picked up.");
-                    }
-
-                    // open door if player has key
-                    if (tileTex == TextureManager.doorTex && _player.HasKey)
-                    {
-                        _map.SetTileTexture(px, py, TextureManager.openDoor, true);
-                        System.Diagnostics.Debug.WriteLine("Door opened.");
-                    }
-
-                    // If player stands on an opened door and we're playing -> Win
-                    var currentTex = _map.GetTileTexture(px, py);
-                    if (_gameState.CurrentState == GameState.State.Playing
-                        && currentTex == TextureManager.openDoor
-                        && _player.HasKey)
-                    {
-                        _gameState.ChangeState(GameState.State.Win);
-                        TextureManager.vectory.Play();
-                        System.Diagnostics.Debug.WriteLine("Player reached open door — WIN.");
-                    }
-                }
-
-                base.Update(gameTime);
             }
+
+            // update player once per frame (moved outside loops)
+            _player.Update(gameTime);
+
+            // --- Key pickup and door opening logic --- (outside loops)
+            int px = _player.TileX;
+            int py = _player.TileY;
+            if (_map.IsInside(px, py))
+            {
+                var tileTex = _map.GetTileTexture(px, py);
+
+                // pickup key
+                if (tileTex == TextureManager.zeldaKey && !_player.HasKey)
+                {
+                    _player.PickupKey();
+                    _map.SetTileTexture(px, py, TextureManager.grassTex, true);
+                    System.Diagnostics.Debug.WriteLine("Key picked up.");
+                }
+
+                // open door if player has key
+                if (tileTex == TextureManager.doorTex && _player.HasKey)
+                {
+                    _map.SetTileTexture(px, py, TextureManager.openDoor, true);
+                    System.Diagnostics.Debug.WriteLine("Door opened.");
+                }
+
+                // If player stands on an opened door and we're playing -> Win
+                var currentTex = _map.GetTileTexture(px, py);
+                if (_gameState.CurrentState == GameState.State.Playing
+                    && currentTex == TextureManager.openDoor
+                    && _player.HasKey)
+                {
+                    _gameState.ChangeState(GameState.State.Win);
+                    TextureManager.vectory?.Play();
+                    System.Diagnostics.Debug.WriteLine("Player reached open door — WIN.");
+                }
+            }
+
+            base.Update(gameTime);
         }
 
         protected override void Draw(GameTime gameTime)

@@ -17,9 +17,9 @@ namespace Zeldagame
 
         // Pixel-baserad position och mål
         private Vector2 position;      // aktuell pixelposition
-        private Vector2 destination;   // pixelmål för denna förflyttning
+        private Vector2 destination;   // pixelmål 
         private bool moving = false;
-        private float speed = 200f;    // pixlar/sek
+        private float speed = 180f;    // pixlar/sek — 
 
         // Sprite-sheet
         private readonly int frameWidth;
@@ -78,9 +78,8 @@ namespace Zeldagame
         public bool HasKey { get; private set; } = false;
         public void PickupKey()
         {
-            TextureManager.getKey.Play();
+            TextureManager.getKey?.Play();
             HasKey = true;
-
         }
 
         public void Update(GameTime gt)

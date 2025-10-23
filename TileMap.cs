@@ -57,6 +57,7 @@ namespace Zeldagame
                         case 8: tex = TextureManager.grassTex; PlayerStart = new Point(x, y); break;
                         case 9: tex = TextureManager.zeldaKey; break;
                         
+                        
 
                         default: tex = TextureManager.grassTex; break;
                     }

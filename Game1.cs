@@ -13,15 +13,29 @@ namespace Zelda_game
         private GraphicsDeviceManager _graphics;
         private SpriteBatch _spriteBatch;
 
-        // ----- TILE/KARTA -----
-        private Texture2D _tileset;     // hämtas från TextureManager
-        private int[,] _map;            // kartan från CSV (id per ruta)
-        private int _rows, _cols;
+         
+        private TileMap _map;       // kartan från CSV (id per ruta)
         private const int TILE_SIZE = 32; // ändra vid behov (måste matcha tileset-rutornas storlek)
         private int _tilesPerRow;       // hur många tiles på en rad i tileset-bilden
 
+        private GameState _gameState;
+
+        private List<Enemy> _enemies = new List<Enemy>();
+        private Player _player;
+
+        private List<Projectile> projectiles = new List<Projectile>();
+        private KeyboardState prevKb;
+
+        // simple score counter
+
+        private int _score = 0;
+        private const double PlayerHitCooldown = 1.0; // seconds of invulnerability after a hit
+        private double _playerHitTimer = 0.0;
+
+
+
         // (valfritt) debug-font
-        private SpriteFont _font;
+
 
         public Game1()
         {
@@ -38,39 +52,50 @@ namespace Zelda_game
         {
             _spriteBatch = new SpriteBatch(GraphicsDevice);
 
+           
             // 1) Ladda texturer via din TextureManager
             TextureManager.LoadTexture(Content);
+            
+            _gameState = new GameState();
+            _gameState.LoadContent(Content);
 
-            // 2) Hämta tilesheet från TextureManager
-            // OBS: Byt namnet nedan till rätt fält/egenskap i din TextureManager
-            // ex: TextureManager.tileset, TextureManager.terrainTex, etc.
-            _tileset = TextureManager.grassTex; // <-- sätt detta till rätt property!
+            _map = new TileMap();
 
-            if (_tileset == null)
-                throw new Exception("Tileset saknas i TextureManager. Sätt t.ex. TextureManager.tileset i LoadTexture.");
-
-            _tilesPerRow = _tileset.Width / TILE_SIZE;
-            if (_tilesPerRow <= 0)
-                throw new Exception($"Fel TILE_SIZE ({TILE_SIZE}) eller tileset-bredd ({_tileset.Width}).");
-
-          
-
-            // 3) Läs CSV-kartan (lägg filen i Content/Maps/ och 'Copy if newer')
             string csvPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Content", "Map", "ZeldaMap.csv");
-            if (!File.Exists(csvPath))
-                throw new FileNotFoundException($"Hittar inte kartfilen: {csvPath}");
+            if (!File.Exists(csvPath)) throw new FileNotFoundException($"Hitta inte file: {csvPath}");
+            _map.LoadWorld(csvPath);
+            var start = _map.PlayerStart;
+            int fW = 32;
+            int fH = 40;
 
-            string[] lines = File.ReadAllLines(csvPath);
-            _rows = lines.Length;
-            _cols = lines[0].Split(',').Length;
-            _map = new int[_rows, _cols];
 
-            for (int y = 0; y < _rows; y++)
-            {
-                var parts = lines[y].Split(',');
-                for (int x = 0; x < _cols; x++)
-                    _map[y, x] = int.Parse(parts[x].Trim());
-            }
+            // Load Player
+
+            _player = new Player(TextureManager.playerSheet, _map, start.X, start.Y, TILE_SIZE, fW, fH);
+
+            // Load Enemy
+
+            _enemies.Clear();
+            _enemies.Add(new Enemy(
+                texture: TextureManager.enemyTex,
+                startPixelPos: new Vector2((start.X + 6) * TILE_SIZE, (start.Y + 1) * TILE_SIZE),
+                tileSize: 32,
+                axis: PatrolAxis.Horizontal,
+                patrolTiles: 6,
+                slowSpeed: 60f,
+                fastSpeed: 120f,
+                startFast: false
+            ));
+            _enemies.Add(new Enemy(
+               texture: TextureManager.enemyTexRed,
+               startPixelPos: new Vector2((start.X + 10) * TILE_SIZE, (start.Y + 1) * TILE_SIZE),
+               tileSize: 32,
+               axis: PatrolAxis.Vertical,
+               patrolTiles: 4,
+               slowSpeed: 80f,
+               fastSpeed: 140f,
+               startFast: true
+           ));
         }
 
         protected override void Update(GameTime gameTime)
@@ -78,7 +103,134 @@ namespace Zelda_game
             if (Keyboard.GetState().IsKeyDown(Keys.Escape))
                 Exit();
 
-            base.Update(gameTime);
+            _gameState.Update(gameTime);
+
+            // honor GameState request to exit (menu Exit)
+            if (_gameState.RequestExit)
+                Exit();
+
+            var kb = Keyboard.GetState();
+            if (kb.IsKeyDown(Keys.Space) && prevKb.IsKeyUp(Keys.Space))
+            {
+                var proj = _player.TryShoot(TextureManager.playerAttackSheet);
+                if (proj != null)
+                {
+                    projectiles.Add(proj);
+
+                }
+                else System.Diagnostics.Debug.WriteLine("TryShoot returned null (cooldown? texture null?)");
+            }
+
+            // Uppdatera projektiler
+            for (int i = projectiles.Count - 1; i >= 0; i--)
+            {
+                projectiles[i].Update(gameTime, _map);
+                if (projectiles[i].IsDead)
+                    projectiles.RemoveAt(i);
+            }
+
+            prevKb = kb;
+
+            // update Enemy
+            for (int e = 0; e < _enemies.Count; e++)
+            {
+                _enemies[e].Update(gameTime);
+            }
+
+            // Kollisionskontroll: projektil mot enemy
+            for (int i = projectiles.Count - 1; i >= 0; i--)
+            {
+                var proj = projectiles[i];
+                if (proj.IsDead) { projectiles.RemoveAt(i); continue; }
+
+                for (int e = _enemies.Count - 1; e >= 0; e--)
+                {
+                    var enemy = _enemies[e];
+                    if (!enemy.Alive) continue;
+
+                    if (proj.Bounds.Intersects(enemy.enemyBounds))
+                    {
+                        // markera enemy död och ta bort projektil
+                        enemy.Kill();
+                        proj.Kill();
+
+                        // increment score for the kill
+                        _score += 100;
+
+                        // ta bort projektil direkt från listan
+                        projectiles.RemoveAt(i);
+
+                        // ta bort enemy från listan så den försvinner helt
+                        _enemies.RemoveAt(e);
+
+                        
+                    }
+                }
+            }
+
+            // Kollisionskontroll: enemy träffar player -> förlora 1 liv
+            for (int e = _enemies.Count - 1; e >= 0; e--)
+            {
+                var enemy = _enemies[e];
+                if (!enemy.Alive) continue;
+
+                if (enemy.enemyBounds.Intersects(_player.Bounds))
+                {
+                    if (_playerHitTimer <= 0.0)
+                    {
+                        _player.Hurt();
+                        _playerHitTimer = PlayerHitCooldown;
+
+                        // remove enemy so it doesn't hit repeatedly (adjust behavior as you want)
+                        
+
+
+                        // check gameover
+                        if (_player.Lives <= 0)
+                        {
+                            _gameState.ChangeState(GameState.State.GameOver);
+                        }
+                    }
+                }
+
+                _player.Update(gameTime);
+
+                // --- Key pickup and door opening logic ---
+                int px = _player.TileX;
+                int py = _player.TileY;
+                if (_map.IsInside(px, py))
+                {
+                    var tileTex = _map.GetTileTexture(px, py);
+
+                    // pickup key
+                    if (tileTex == TextureManager.zeldaKey && !_player.HasKey)
+                    {
+                        _player.PickupKey();
+                        _map.SetTileTexture(px, py, TextureManager.grassTex, true);
+                        System.Diagnostics.Debug.WriteLine("Key picked up.");
+                    }
+
+                    // open door if player has key
+                    if (tileTex == TextureManager.doorTex && _player.HasKey)
+                    {
+                        _map.SetTileTexture(px, py, TextureManager.openDoor, true);
+                        System.Diagnostics.Debug.WriteLine("Door opened.");
+                    }
+
+                    // If player stands on an opened door and we're playing -> Win
+                    var currentTex = _map.GetTileTexture(px, py);
+                    if (_gameState.CurrentState == GameState.State.Playing
+                        && currentTex == TextureManager.openDoor
+                        && _player.HasKey)
+                    {
+                        _gameState.ChangeState(GameState.State.Win);
+                        TextureManager.vectory.Play();
+                        System.Diagnostics.Debug.WriteLine("Player reached open door — WIN.");
+                    }
+                }
+
+                base.Update(gameTime);
+            }
         }
 
         protected override void Draw(GameTime gameTime)
@@ -87,37 +239,22 @@ namespace Zelda_game
 
             // Viktigt för skarpa pixlar
             _spriteBatch.Begin(samplerState: SamplerState.PointClamp);
+            _gameState.Draw(_spriteBatch);
 
-            for (int y = 0; y < _rows; y++)
+            switch (_gameState.CurrentState)
             {
-                for (int x = 0; x < _cols; x++)
-                {
-                    int id = _map[y, x];
+                case GameState.State.Playing:
+                    _map.Draw(_spriteBatch);
+                    _player.Draw(_spriteBatch);
+                    foreach (var enemy in _enemies) { enemy.Draw(_spriteBatch); }
+                    foreach(var p in projectiles) { p.Draw(_spriteBatch); }
 
-                    Texture2D tex = TextureManager.grassTex; // standard = gräs
-                    switch (id)
-                    {
-                        case 1: tex = TextureManager.waterTex; break;
-                        case 2: tex = TextureManager.bridgeTex; break;
-                        case 3: tex = TextureManager.wallTex; break;
-                        case 4: tex = TextureManager.doorTex; break;
-                        case 5: tex = TextureManager.treeTex; break;
-                        case 6: tex = TextureManager.floorTex;break;
-                        case 7: tex = TextureManager.zledaTex; break;
-
-
-                       
-                        
-                    }
-
-                    var pos = new Vector2(x * TILE_SIZE, y * TILE_SIZE);
-                    _spriteBatch.Draw(tex, pos, Color.White);
-                }
+                    // update GameState HUD values and draw HUD on top
+                    _gameState.PlayerLives = _player.Lives;
+                    _gameState.Score = _score;
+                    _gameState.DrawHUD(_spriteBatch);
+                    break;
             }
-
-            // (valfritt) debug-text
-            // if (_font != null)
-            //     _spriteBatch.DrawString(_font, $"rows={_rows} cols={_cols}", new Vector2(10,10), Color.White);
 
             _spriteBatch.End();
             base.Draw(gameTime);

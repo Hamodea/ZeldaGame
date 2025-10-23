@@ -8,53 +8,100 @@ namespace Zeldagame
 {
     public class TileMap
     {
-        private int[,] map;              // själva kartan (från CSV)
-        private Texture2D tileset;       // spritesheet med alla tiles
-        private int tileSize;            // t.ex. 32 pixlar
-        private int tilesPerRow;         // hur många rutor per rad i spritesheetet
+        private Tile[,] tiles;
+        private int rows, cols;
+        private readonly int tileSize = 32;
 
-        public TileMap(Texture2D tileset, string csvPath, int tileSize)
+        public Point PlayerStart { get; private set; } = new Point(5, 1);
+
+        public int Rows => rows;
+        public int Cols => cols;
+        public int TileSize => tileSize;
+
+        public void LoadWorld(string path)
         {
-            this.tileset = tileset;
-            this.tileSize = tileSize;
-            this.tilesPerRow = tileset.Width / tileSize;
+            var lines = new List<string>();
+            using (var sr = new StreamReader(path))
+            {
+                string line;
+                while ((line = sr.ReadLine()) != null)
+                {
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+                    lines.Add(line.Trim());
+                }
+            }
 
-            //  Läs in CSV-filen (alla rader)
-            string[] lines = File.ReadAllLines(csvPath);
-            int rows = lines.Length;
-            int cols = lines[0].Split(',').Length;
-
-            map = new int[rows, cols];
+            rows = lines.Count;
+            cols = lines[0].Split(',').Length;
+            tiles = new Tile[rows, cols];
 
             for (int y = 0; y < rows; y++)
             {
                 var parts = lines[y].Split(',');
                 for (int x = 0; x < cols; x++)
                 {
-                    map[y, x] = int.Parse(parts[x].Trim());
+                    int id = int.Parse(parts[x].Trim());
+                    Texture2D tex;
+                    bool walkable = true;
+
+                    switch (id)
+                    {
+                        case 0: tex = TextureManager.grassTex; break;
+                        case 1: tex = TextureManager.waterTex; walkable = false; break;
+                        case 2: tex = TextureManager.bridgeTex; break;
+                        case 3: tex = TextureManager.wallTex; walkable = false; break;
+                        case 4: tex = TextureManager.doorTex; walkable = false; break;
+                        case 5: tex = TextureManager.treeTex; walkable = false; break;
+                        case 6: tex = TextureManager.floorTex ?? TextureManager.grassTex; break;
+                        case 7: tex = TextureManager.zledaTex ?? TextureManager.grassTex; break;
+                        case 8: tex = TextureManager.grassTex; PlayerStart = new Point(x, y); break;
+                        case 9: tex = TextureManager.zeldaKey; break;
+                        
+
+                        default: tex = TextureManager.grassTex; break;
+                    }
+
+                    tex ??= TextureManager.grassTex;
+
+                    var pos = new Vector2(x * tileSize, y * tileSize);
+                    tiles[y, x] = new Tile(tex, pos, walkable);
                 }
             }
         }
 
         public void Draw(SpriteBatch sb)
         {
-            for (int y = 0; y < map.GetLength(0); y++)
-            {
-                for (int x = 0; x < map.GetLength(1); x++)
-                {
-                    int gid = map[y, x]; // tile ID från CSV
-                    if (gid < 0) continue;
+            if (tiles == null) return;
 
-                    // 🧩 Beräkna vilken ruta i spritesheetet vi ska använda
-                    int sx = (gid % tilesPerRow) * tileSize;
-                    int sy = (gid / tilesPerRow) * tileSize;
+            for (int y = 0; y < rows; y++)
+                for (int x = 0; x < cols; x++)
+                    tiles[y, x].Draw(sb);
+        }
 
-                    var src = new Rectangle(sx, sy, tileSize, tileSize);
-                    var dst = new Rectangle(x * tileSize, y * tileSize, tileSize, tileSize);
+        public bool IsInside(int x, int y) => y >= 0 && y < rows && x >= 0 && x < cols;
+        public bool IsWalkable(int x, int y) => IsInside(x, y) && tiles[y, x].IsWalkable;
 
-                    sb.Draw(tileset, dst, src, Color.White);
-                }
-            }
+        // Hjälpare: kolla walkable vid pixelposition
+        public bool IsWalkableAtPixel(Vector2 pixel)
+        {
+            int tx = (int)(pixel.X / tileSize);
+            int ty = (int)(pixel.Y / tileSize);
+            return IsWalkable(tx, ty);
+        }
+
+        // New helpers to read and modify tiles at runtime
+        public Texture2D GetTileTexture(int x, int y)
+        {
+            if (!IsInside(x, y)) return null;
+            return tiles[y, x].Texture;
+        }
+
+        public void SetTileTexture(int x, int y, Texture2D texture, bool? isWalkable = null)
+        {
+            if (!IsInside(x, y)) return;
+            var pos = tiles[y, x].Position;
+            bool walk = isWalkable ?? tiles[y, x].IsWalkable;
+            tiles[y, x] = new Tile(texture ?? TextureManager.grassTex, pos, walk);
         }
     }
 }

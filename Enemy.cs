@@ -90,7 +90,7 @@ namespace Zeldagame
 
         }
 
-        // Publicly allow killing the enemy (used by collision handling)
+       
         public void Kill()
         {
             Alive = false;

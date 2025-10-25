@@ -58,7 +58,7 @@ namespace Zeldagame
             enemyTex = content.Load<Texture2D>("OctorokBlue");
             enemyTexRed = content.Load<Texture2D>("OctorokRed");
             playerAttackSheet = content.Load<Texture2D>("zeldaSword1");
-            zeldaKey = content.Load<Texture2D>("key");
+            zeldaKey = content.Load<Texture2D>("key32");
             openDoor = content.Load<Texture2D>("opendoor");
 
             font = content.Load<SpriteFont>("UiFont");

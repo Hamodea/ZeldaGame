@@ -19,7 +19,7 @@ namespace Zeldagame
         private Vector2 position;      // aktuell pixelposition
         private Vector2 destination;   // pixelmål 
         private bool moving = false;
-        private float speed = 180f;    // pixlar/sek — 
+        private float speed = 200f;    // pixlar/sek — 
 
         // Sprite-sheet
         private readonly int frameWidth;
@@ -31,7 +31,7 @@ namespace Zeldagame
         public int TileY { get; private set; }
 
         // Animation
-        private int dirRow = 0;                 // 0=Down,1=Left,2=Right,3=Up (justera efter din sheet)
+        private int dirRow = 0;                 // 0=Down,1=Left,2=Right,3=Up
         private int frame = 0;
         private double animTimer = 0;
         private double animSpeed = 100;         // ms per frame
@@ -210,6 +210,7 @@ namespace Zeldagame
 
             // play shoot sound
             TextureManager.shootSfx?.Play();
+            const float rotationOffset = +MathF.PI / 2f;
 
             return new Projectile(
                 projTexture,
@@ -219,7 +220,8 @@ namespace Zeldagame
                 life,
                 frameW,
                 frameH,
-                scale
+                scale,
+                rotationOffset
             );
         }
 
@@ -229,7 +231,6 @@ namespace Zeldagame
             int sy = dirRow * frameHeight;
             var src = new Rectangle(sx, sy, frameWidth, frameHeight);
 
-            // Om din sprite är högre än tile (t.ex. 40 vs 32), lyft upp så fötterna står på marken
             float yOffset = frameHeight > tileSize ? -(frameHeight - tileSize) : 0f;
 
             sb.Draw(sheet, position + new Vector2(0, yOffset), src, Color.White);

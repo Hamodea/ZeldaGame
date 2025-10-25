@@ -1,10 +1,6 @@
 ﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Zeldagame
 {
@@ -18,14 +14,27 @@ namespace Zeldagame
         private readonly float maxLifetime;
         private readonly int frameWidth;
         private readonly int frameHeight;
-        public float Scale = 2f;     
-        public bool IsDead { get; private set; } = false;
 
+        public float Scale = 2f;
+        public bool IsDead { get; private set; } = false;
         public float Depth = 0.6f;
 
+        // NYTT: rotation, origin och valfri offset om din sprite pekar "fel" i default
+        private readonly float rotation;
+        private readonly float rotationOffset;
+        private readonly Vector2 origin;
 
-
-        public Projectile(Texture2D texture, Vector2 startPos, Vector2 directionNormalized, float speed = 300f, float life = 1.0f, int frameWidth = 16, int frameHeight = 16, float scale = 2f)
+        public Projectile(
+            Texture2D texture,
+            Vector2 startPos,
+            Vector2 directionNormalized,
+            float speed = 300f,
+            float life = 1.0f,
+            int frameWidth = 16,
+            int frameHeight = 16,
+            float scale = 2f,
+            float rotationOffset = 0f // sätt t.ex. -MathF.PI/2 om din sprite pekar uppåt i default
+        )
         {
             this.texture = texture ?? throw new ArgumentNullException(nameof(texture));
             this.position = startPos;
@@ -36,16 +45,28 @@ namespace Zeldagame
             this.frameWidth = frameWidth;
             this.frameHeight = frameHeight;
             this.Scale = scale;
-        }
 
+            this.rotationOffset = rotationOffset;
+
+            // 0 rad = höger; atan2 ger rätt vinkel; lägg på valfri offset
+            this.rotation = (float)Math.Atan2(directionNormalized.Y, directionNormalized.X) + rotationOffset;
+
+            // rotera/rita runt mitten av källbilden
+            this.origin = new Vector2(frameWidth / 2f, frameHeight / 2f);
+        }
 
         public Rectangle Bounds
         {
             get
             {
+                // Centrerad AABB (approx för kollision – duger i 2D)
                 float w = frameWidth * Scale;
                 float h = frameHeight * Scale;
-                return new Rectangle((int)(position.X - w ), (int)(position.Y - h), (int)w, (int)h);
+                return new Rectangle(
+                    (int)(position.X - w / 2f),
+                    (int)(position.Y - h / 2f),
+                    (int)w, (int)h
+                );
             }
         }
 
@@ -55,15 +76,14 @@ namespace Zeldagame
             position += velocity * dt;
             lifetime -= dt;
 
-            if(tileMap != null && lifetime > 0f)
+            if (tileMap != null && lifetime > 0f)
             {
                 int tx = (int)Math.Floor(position.X / tileMap.TileSize);
                 int ty = (int)Math.Floor(position.Y / tileMap.TileSize);
 
                 if (!tileMap.IsInside(tx, ty) || !tileMap.IsWalkable(tx, ty))
                 {
-                    // döda projektilen direkt vid vägg
-                    lifetime = 0f;
+                    lifetime = 0f; // träffar vägg → dö direkt
                 }
             }
 
@@ -71,35 +91,30 @@ namespace Zeldagame
                 IsDead = true;
         }
 
-
         public void Draw(SpriteBatch sb)
         {
-            //Skippa ritning om projektilen är död
-            if (IsDead)
-                return;
+            if (IsDead) return;
 
-            // Rita med destination-rect för pixelperfekt storlek
-            float drawW = frameWidth * Scale;
-            float drawH = frameHeight * Scale;
-            var dest = new Rectangle(
-                (int)Math.Floor(position.X - drawW / 2f),
-                (int)Math.Floor(position.Y - drawH / 2f),
-                (int)drawW, (int)drawH
+            var src = new Rectangle(0, 0, frameWidth, frameHeight);
+
+            // VIKTIGT: center-baserad draw + rotation
+            sb.Draw(
+                texture,
+                position,          // tolkas som centrum när 'origin' används
+                src,
+                Color.White,
+                rotation,
+                origin,            // rotera kring mitten
+                Scale,
+                SpriteEffects.None,
+                Depth
             );
-
-            var src = new Rectangle(0, 0, frameWidth, frameHeight); // antag enkel single-frame texture (16x16)
-            sb.Draw(texture, dest, src, Color.White, 0f, Vector2.Zero, SpriteEffects.None, Depth);
         }
 
         public void Kill()
         {
-
             IsDead = true;
             System.Diagnostics.Debug.WriteLine("Projectile killed");
         }
-
-
-
-
     }
 }

@@ -78,7 +78,7 @@ namespace Zelda_game
             _enemies.Clear();
             _enemies.Add(new Enemy(
                 texture: TextureManager.enemyTex,
-                startPixelPos: new Vector2((start.X + 6) * TILE_SIZE, (start.Y + 1) * TILE_SIZE),
+                startPixelPos: new Vector2(300, 50),
                 tileSize: 32,
                 axis: PatrolAxis.Horizontal,
                 patrolTiles: 6,
@@ -88,7 +88,7 @@ namespace Zelda_game
             ));
             _enemies.Add(new Enemy(
                texture: TextureManager.enemyTexRed,
-               startPixelPos: new Vector2((start.X + 10) * TILE_SIZE, (start.Y + 1) * TILE_SIZE),
+               startPixelPos: new Vector2(390, 200),
                tileSize: 32,
                axis: PatrolAxis.Vertical,
                patrolTiles: 4,
